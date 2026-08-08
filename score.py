@@ -1,34 +1,13 @@
 import os
 import sys
 import json
-
-# Fix for Windows Console Unicode errors
-if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-    except AttributeError:
-        pass
-
-# Fix for Python 3.14 Protobuf TypeError
-os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
-
 import logging
 import csv
-
-if sys.platform == "win32":
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8")
-
-import argparse
-
 from pdf import PDFHandler
 from github import fetch_and_display_github_info
-from models import JSONResume, build_evaluation_model
+from models import JSONResume, EvaluationData
 from typing import List, Optional, Dict
 from evaluator import ResumeEvaluator
-from roles import Role, load_role, list_available_roles, scaffold_role
 from pathlib import Path
 from prompt import DEFAULT_MODEL, MODEL_PARAMETERS
 from transform import (
@@ -48,7 +27,7 @@ logging.basicConfig(
 
 
 def print_evaluation_results(
-    evaluation, role: Role, candidate_name: str = "Candidate"
+    evaluation: EvaluationData, candidate_name: str = "Candidate"
 ):
     """Print evaluation results in a readable format."""
     print("\n" + "=" * 80)
@@ -84,7 +63,7 @@ def print_evaluation_results(
         total_score -= evaluation.deductions.total
 
     # Ensure total score doesn't exceed maximum possible score
-    max_possible_score = max_score + role.bonus_max
+    max_possible_score = max_score + 20  # 120 (100 categories + 20 bonus)
     if total_score > max_possible_score:
         total_score = max_possible_score
         print(f"⚠️  Warning: Total score capped at maximum possible value")
@@ -97,13 +76,50 @@ def print_evaluation_results(
     print("-" * 60)
 
     if hasattr(evaluation, "scores") and evaluation.scores:
-        for category in role.categories:
-            cat_score = getattr(evaluation.scores, category.key, None)
-            if not cat_score:
-                continue
-            capped_score = min(cat_score.score, category.max)
-            print(f"{category.icon} {category.label}: {capped_score}/{cat_score.max}")
-            print(f"   Evidence: {cat_score.evidence}")
+        # Define category maximums
+        category_maxes = {
+            "open_source": 35,
+            "self_projects": 30,
+            "production": 25,
+            "technical_skills": 10,
+        }
+
+        # Open Source
+        if hasattr(evaluation.scores, "open_source") and evaluation.scores.open_source:
+            os_score = evaluation.scores.open_source
+            capped_score = min(os_score.score, category_maxes["open_source"])
+            print(f"🌐 Open Source:          {capped_score}/{os_score.max}")
+            print(f"   Evidence: {os_score.evidence}")
+            print()
+
+        # Self Projects
+        if (
+            hasattr(evaluation.scores, "self_projects")
+            and evaluation.scores.self_projects
+        ):
+            sp_score = evaluation.scores.self_projects
+            capped_score = min(sp_score.score, category_maxes["self_projects"])
+            print(f"🚀 Self Projects:        {capped_score}/{sp_score.max}")
+            print(f"   Evidence: {sp_score.evidence}")
+            print()
+
+        # Production Experience
+        if hasattr(evaluation.scores, "production") and evaluation.scores.production:
+            prod_score = evaluation.scores.production
+            capped_score = min(prod_score.score, category_maxes["production"])
+            print(f"🏢 Production Experience: {capped_score}/{prod_score.max}")
+            print(f"   Evidence: {prod_score.evidence}")
+            print()
+
+        # Technical Skills
+        if (
+            hasattr(evaluation.scores, "technical_skills")
+            and evaluation.scores.technical_skills
+        ):
+            tech_score = evaluation.scores.technical_skills
+            capped_score = min(tech_score.score, category_maxes["technical_skills"])
+            print(f"💻 Technical Skills:     {capped_score}/{tech_score.max}")
+            print(f"   Evidence: {tech_score.evidence}")
             print()
 
     # Bonus Points
@@ -144,21 +160,12 @@ def print_evaluation_results(
 
 
 def _evaluate_resume(
-    resume_data: JSONResume,
-    role: Role,
-    evaluation_model,
-    github_data: dict = None,
-    blog_data: dict = None,
-):
+    resume_data: JSONResume, github_data: dict = None, blog_data: dict = None
+) -> Optional[EvaluationData]:
     """Evaluate the resume using AI and display results."""
 
     model_params = MODEL_PARAMETERS.get(DEFAULT_MODEL)
-    evaluator = ResumeEvaluator(
-        role=role,
-        evaluation_model=evaluation_model,
-        model_name=DEFAULT_MODEL,
-        model_params=model_params,
-    )
+    evaluator = ResumeEvaluator(model_name=DEFAULT_MODEL, model_params=model_params)
 
     # Convert JSON resume data to text
     resume_text = convert_json_resume_to_text(resume_data)
@@ -204,9 +211,7 @@ def find_profile(profiles, network):
     )
 
 
-def main(pdf_path, role: Role):
-    evaluation_model = build_evaluation_model(role)
-
+def main(pdf_path):
     # Create cache filename based on PDF path
     cache_filename = (
         f"cache/resumecache_{os.path.basename(pdf_path).replace('.pdf', '')}.json"
@@ -304,9 +309,7 @@ def main(pdf_path, role: Role):
                     else ""
                 )
             )
-            github_data = fetch_and_display_github_info(
-                github_profile.url, position_title=role.position_title
-            )
+            github_data = fetch_and_display_github_info(github_profile.url)
 
             if (
                 DEVELOPMENT_MODE
@@ -320,7 +323,7 @@ def main(pdf_path, role: Role):
                     encoding="utf-8",
                 )
 
-    score = _evaluate_resume(resume_data, role, evaluation_model, github_data)
+    score = _evaluate_resume(resume_data, github_data)
 
     # Get candidate name for display
     candidate_name = os.path.basename(pdf_path).replace(".pdf", "")
@@ -333,7 +336,7 @@ def main(pdf_path, role: Role):
         candidate_name = resume_data.basics.name
 
     # Print evaluation results in readable format
-    print_evaluation_results(score, role, candidate_name)
+    print_evaluation_results(score, candidate_name)
 
     if DEVELOPMENT_MODE:
         csv_row = transform_evaluation_response(
@@ -341,11 +344,10 @@ def main(pdf_path, role: Role):
             evaluation=score,
             resume_data=resume_data,
             github_data=github_data,
-            role=role,
         )
 
-        # Write CSV row to a role-specific file, since each role's columns differ.
-        csv_path = f"resume_evaluations_{role.name}.csv"
+        # Write CSV row to file
+        csv_path = "resume_evaluations.csv"
         file_exists = os.path.exists(csv_path)
 
         with open(csv_path, "a", newline="", encoding="utf-8") as csvfile:
@@ -363,50 +365,13 @@ def main(pdf_path, role: Role):
 
 
 if __name__ == "__main__":
-    available_roles = list_available_roles()
-    parser = argparse.ArgumentParser(
-        description="Score a resume against a role's rubric."
-    )
-    parser.add_argument(
-        "pdf_path", nargs="?", help="Path to the resume PDF to evaluate"
-    )
-    parser.add_argument(
-        "--role",
-        help="Role to score against (a directory name under roles/). "
-        + (f"Available: {', '.join(available_roles)}" if available_roles else ""),
-    )
-    parser.add_argument(
-        "--init-role",
-        metavar="NAME",
-        help="Scaffold a new role directory under roles/ with basic template "
-        "files, then exit (does not score a resume).",
-    )
-    args = parser.parse_args()
+    if len(sys.argv) < 2:
+        print("Usage: python score.py <pdf_path>")
+        exit(1)
+    pdf_path = sys.argv[1]
 
-    # Scaffold mode: create a new role and exit.
-    if args.init_role:
-        try:
-            role_dir = scaffold_role(args.init_role)
-        except ValueError as e:
-            print(f"Error: {e}")
-            exit(1)
-        print(f"✅ Created role '{args.init_role}' at {role_dir}")
-        print("   Edit role.json, criteria.jinja and system_message.jinja, then run:")
-        print(f"   python score.py <pdf_path> --role {args.init_role}")
-        exit(0)
-
-    # Scoring mode: both pdf_path and --role are required.
-    if not args.pdf_path or not args.role:
-        parser.error("pdf_path and --role are required (or use --init-role NAME)")
-
-    if not os.path.exists(args.pdf_path):
-        print(f"Error: File '{args.pdf_path}' does not exist.")
+    if not os.path.exists(pdf_path):
+        print(f"Error: File '{pdf_path}' does not exist.")
         exit(1)
 
-    try:
-        role = load_role(args.role)
-    except ValueError as e:
-        print(f"Error: {e}")
-        exit(1)
-
-    main(args.pdf_path, role)
+    main(pdf_path)

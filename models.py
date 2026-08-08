@@ -1,5 +1,13 @@
-from typing import List, Optional, Dict, Tuple, Any, Type, Protocol, runtime_checkable
-from pydantic import BaseModel, Field, create_model, field_validator
+from typing import List, Optional, Dict, Tuple, Any, Protocol, runtime_checkable
+from pydantic import BaseModel, Field, field_validator
+from enum import Enum
+
+
+class ModelProvider(Enum):
+    """Enum for supported model providers."""
+
+    OLLAMA = "ollama"
+    GEMINI = "gemini"
 
 
 @runtime_checkable
@@ -213,6 +221,18 @@ class CategoryScore(BaseModel):
     evidence: str = Field(min_length=1, description="Evidence supporting the score")
 
 
+class Scores(BaseModel):
+    open_source: CategoryScore
+    self_projects: CategoryScore
+    production: CategoryScore
+    technical_skills: CategoryScore
+
+
+class BonusPoints(BaseModel):
+    total: float = Field(ge=0, le=20, description="Total bonus points")
+    breakdown: str = Field(description="Breakdown of bonus points")
+
+
 class Deductions(BaseModel):
     total: float = Field(
         ge=0,
@@ -221,42 +241,12 @@ class Deductions(BaseModel):
     reasons: str = Field(description="Reasons for deductions")
 
 
-def build_scores_model(categories) -> Type[BaseModel]:
-    """Build a ``Scores`` model with one CategoryScore field per role category.
-
-    Using ``create_model`` (rather than a loose ``Dict[str, CategoryScore]``)
-    keeps the emitted JSON schema concrete — the exact category property names —
-    so the LLM's structured output stays as constrained as the old fixed schema.
-    """
-    fields = {category.key: (CategoryScore, ...) for category in categories}
-    return create_model("Scores", **fields)
-
-
-def build_evaluation_model(role) -> Type[BaseModel]:
-    """Build the full ``EvaluationData`` model for a given role.
-
-    Categories/weights and the bonus cap come from the role definition, so each
-    role scores against its own rubric.
-    """
-    scores_model = build_scores_model(role.categories)
-
-    bonus_model = create_model(
-        "BonusPoints",
-        total=(
-            float,
-            Field(ge=0, le=role.bonus_max, description="Total bonus points"),
-        ),
-        breakdown=(str, Field(description="Breakdown of bonus points")),
-    )
-
-    return create_model(
-        "EvaluationData",
-        scores=(scores_model, ...),
-        bonus_points=(bonus_model, ...),
-        deductions=(Deductions, ...),
-        key_strengths=(List[str], Field(min_items=1, max_items=5)),
-        areas_for_improvement=(List[str], Field(min_items=1, max_items=5)),
-    )
+class EvaluationData(BaseModel):
+    scores: Scores
+    bonus_points: BonusPoints
+    deductions: Deductions
+    key_strengths: List[str] = Field(min_items=1, max_items=5)
+    areas_for_improvement: List[str] = Field(min_items=1, max_items=5)
 
 
 class GitHubProfile(BaseModel):
@@ -278,25 +268,13 @@ class GitHubProfile(BaseModel):
     hireable: Optional[bool] = None
 
 
-class OpenAICompatibleProvider:
-    """Generic OpenAI-chat-compatible LLM provider.
+class OllamaProvider:
+    """Ollama LLM provider implementation."""
 
-    Works for Ollama (/v1), Gemini (/v1beta/openai), OpenAI, Groq, OpenRouter,
-    DeepSeek, LM Studio, vLLM, etc. via a configurable base_url. Adapts the
-    response to the {"message": {"content": ...}} shape the evaluator expects.
-    """
+    def __init__(self):
+        import ollama
 
-    def __init__(
-        self,
-        base_url: str,
-        api_key: Optional[str] = None,
-        structured_output: str = "json_schema",
-        extra_body: Optional[Dict[str, Any]] = None,
-    ):
-        self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
-        self.structured_output = structured_output
-        self.extra_body = extra_body or {}
+        self.client = ollama
 
     def chat(
         self,
@@ -305,75 +283,109 @@ class OpenAICompatibleProvider:
         options: Dict[str, Any] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        import requests
+        """Send a chat request to Ollama."""
+
+        ollama_options = options.copy() if options else {}
+
+        # remove steam from ollama options
+        ollama_options.pop("stream", None)
+
+        # Add num_ctx 32K context window to options
+        ollama_options["num_ctx"] = 32768
+
+        # convert to chat params
+        chat_params = {
+            "model": model,
+            "messages": messages,
+            "options": ollama_options,
+        }
+
+        # add it to top level
+        if "stream" in kwargs:
+            chat_params["stream"] = kwargs["stream"]
+
+        if "format" in kwargs:
+            chat_params["format"] = kwargs["format"]
+
+        return self.client.chat(**chat_params)
+
+
+class GeminiProvider:
+    """Google Gemini API provider implementation."""
+
+    def __init__(self, api_key: str):
+        import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+        self.client = genai
+
+    def chat(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        options: Dict[str, Any] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Send a chat request to Google Gemini API."""
+        import re
         import time
         import random
-
-        options = options or {}
-        body: Dict[str, Any] = {"model": model, "messages": messages, "stream": False}
-        if "temperature" in options:
-            body["temperature"] = options["temperature"]
-        if "top_p" in options:
-            body["top_p"] = options["top_p"]
-
-        # Structured-output translation: evaluator passes format=<json schema>.
-        if "format" in kwargs and self.structured_output != "none":
-            schema = kwargs["format"]
-            if self.structured_output == "json_schema":
-                body["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": {"name": "response", "schema": schema},
-                }
-            elif self.structured_output == "json_object":
-                body["response_format"] = {"type": "json_object"}
-
-        body.update(self.extra_body)
-
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-        url = f"{self.base_url}/chat/completions"
+        from google.api_core.exceptions import ResourceExhausted
 
         MAX_RETRIES = 5
         BASE_DELAY = 10.0  # seconds — base for exponential backoff
         MAX_DELAY = 120.0  # cap so we never wait more than 2 minutes
-        # Transient server errors worth retrying with backoff. Unlike 429 these
-        # rarely carry a Retry-After header, so we always use exponential backoff.
-        RETRYABLE_SERVER_ERRORS = {500, 502, 503, 504}
+
+        # Map options to Gemini parameters
+        generation_config = {}
+        if options:
+            if "temperature" in options:
+                generation_config["temperature"] = options["temperature"]
+            if "top_p" in options:
+                generation_config["top_p"] = options["top_p"]
+
+        # Create a Gemini model
+        gemini_model = self.client.GenerativeModel(
+            model_name=model, generation_config=generation_config
+        )
+
+        # Convert messages to Gemini format
+        gemini_messages = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            gemini_messages.append({"role": role, "parts": [msg["content"]]})
+
         for attempt in range(MAX_RETRIES):
-            response = requests.post(url, json=body, headers=headers, timeout=300)
+            try:
+                # Send the chat request
+                response = gemini_model.generate_content(gemini_messages)
 
-            if response.status_code == 429 and attempt < MAX_RETRIES - 1:
-                retry_after = response.headers.get("Retry-After")
+                # Convert Gemini response to Ollama-like format for compatibility
+                return {"message": {"role": "assistant", "content": response.text}}
+
+            except ResourceExhausted as e:
+                if attempt == MAX_RETRIES - 1:
+                    # All retries exhausted — re-raise the original exception.
+                    # This surfaces unrecoverable quota errors (RPD, TPM, etc.)
+                    # instead of silently failing or returning bad data.
+                    raise
+
+                # Parse the API-suggested retry delay from the error message
+                match = re.search(r"retry[_ ]in\s+([\d.]+)s", str(e), re.IGNORECASE)
+                api_hint = float(match.group(1)) if match else None
+
+                # Exponential backoff: BASE_DELAY * 2^attempt, capped at MAX_DELAY
                 exp_delay = min(BASE_DELAY * (2 ** attempt), MAX_DELAY)
-                delay = float(retry_after) if retry_after else exp_delay
+
+                # Prefer the API hint when it is shorter than our computed delay
+                delay = api_hint if (api_hint and api_hint < exp_delay) else exp_delay
+
+                # Add ±20% randomized jitter to avoid thundering herd
                 sleep_time = round(delay * random.uniform(0.8, 1.2), 2)
-                print(
-                    f"[OpenAICompatibleProvider] Rate limit hit "
-                    f"(attempt {attempt + 1}/{MAX_RETRIES}). Retrying in {sleep_time}s..."
-                )
-                time.sleep(sleep_time)
-                continue
 
-            if (
-                response.status_code in RETRYABLE_SERVER_ERRORS
-                and attempt < MAX_RETRIES - 1
-            ):
-                exp_delay = min(BASE_DELAY * (2 ** attempt), MAX_DELAY)
-                sleep_time = round(exp_delay * random.uniform(0.8, 1.2), 2)
                 print(
-                    f"[OpenAICompatibleProvider] Transient server error "
-                    f"{response.status_code} (attempt {attempt + 1}/{MAX_RETRIES}). "
+                    f"[GeminiProvider] Rate limit hit "
+                    f"(attempt {attempt + 1}/{MAX_RETRIES}). "
                     f"Retrying in {sleep_time}s..."
                 )
                 time.sleep(sleep_time)
-                continue
-
-            response.raise_for_status()
-            data = response.json()
-            try:
-                content = data["choices"][0]["message"]["content"]
-            except (KeyError, IndexError, TypeError):
-                raise ValueError(f"Unexpected response shape from {url}: {data}")
-            return {"message": {"role": "assistant", "content": content}}
