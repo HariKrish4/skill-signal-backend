@@ -27,6 +27,7 @@
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
 - [CLI usage](#cli-usage)
+- [REST API usage](#rest-api-usage)
 - [Directory layout](#directory-layout)
 - [Provider details](#provider-details)
 - [Contributing](#contributing)
@@ -36,7 +37,7 @@
 
 ## Overview
 
-Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a local or hosted LLM, augments the data with GitHub profile and repository signals, then produces an objective evaluation with category scores, evidence, bonus points, and deductions. You can run fully local with Ollama or use Google Gemini.
+Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a local or hosted LLM, augments the data with GitHub profile and repository signals, then produces an objective evaluation with category scores, evidence, bonus points, and deductions. It runs as a CLI or as a REST API (`api.py`). You can run fully local with Ollama or use Google Gemini.
 
 ---
 
@@ -52,7 +53,9 @@ Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a lo
 2. `pdf.py` calls the LLM per section using Jinja templates under `prompts/templates`.
 3. `github.py` fetches profile and repos, classifies projects, and asks the LLM to select the top 7.
 4. `evaluator.py` runs a strict-scored evaluation with fairness constraints.
-5. `score.py` orchestrates everything end to end and writes CSV when development mode is on.
+5. `service.py` orchestrates the shared end-to-end pipeline used by both the CLI and the API.
+6. `score.py` prints the readable summary and writes CSV when development mode is on.
+7. `api.py` exposes the same pipeline as a REST API.
 
 </td>
 <td>
@@ -86,7 +89,6 @@ Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a lo
   The repository pins `.python-version` to 3.11.13.
 
 - **One LLM backend** (either of them)
-
   - **Ollama** for local models
     Install from the [official site](https://ollama.com/), then run `ollama serve`.
   - **Google Gemini** if you have an API key, get it from [here](https://aistudio.google.com/api-keys).
@@ -217,6 +219,66 @@ What happens:
 
 ---
 
+## REST API usage
+
+A FastAPI server exposes the same pipeline over HTTP. Interactive Swagger docs are served at `/docs`.
+
+### Starting the server
+
+```bash
+$ uvicorn api:app --reload --port 8000
+```
+
+### Endpoints
+
+| Method | Path        | Description                                                                  |
+| ------ | ----------- | ---------------------------------------------------------------------------- |
+| `GET`  | `/health`   | Liveness check; returns the configured LLM provider and model.               |
+| `POST` | `/evaluate` | Upload a resume PDF (multipart form field `file`) and get a JSON evaluation. |
+
+### Example
+
+```bash
+$ curl http://localhost:8000/health
+```
+
+```bash
+$ curl -X POST -F "file=@resume.pdf;type=application/pdf" http://localhost:8000/evaluate
+```
+
+Response (abridged):
+
+```json
+{
+  "candidate_name": "Hari Krishnan",
+  "overall_score": 76.0,
+  "evaluation": {
+    "scores": {
+      "open_source": { "score": 15, "max": 35, "evidence": "..." },
+      "self_projects": { "score": 28, "max": 30, "evidence": "..." },
+      "production": { "score": 20, "max": 25, "evidence": "..." },
+      "technical_skills": { "score": 8, "max": 10, "evidence": "..." }
+    },
+    "bonus_points": { "total": 5, "breakdown": "..." },
+    "deductions": { "total": 0, "reasons": "" },
+    "key_strengths": ["..."],
+    "areas_for_improvement": ["..."]
+  },
+  "resume_data": { "basics": {}, "work": [], "...": null },
+  "github_data": { "profile": {}, "projects": [], "total_projects": 7 },
+  "cache_used": true
+}
+```
+
+### API notes
+
+- Uploads are validated: the file must be a PDF (magic bytes `%PDF`); otherwise a `400` is returned. A missing file returns `422`.
+- Pipeline errors return `500`; failure to extract resume data returns `422`.
+- Cache keys are derived from the SHA-256 hash of the uploaded bytes, so re-uploading the same resume reuses the `cache/` entries instead of re-running PDF extraction and GitHub fetching.
+- The API returns structured JSON and does **not** write to `resume_evaluations.csv` (only the CLI does).
+
+---
+
 ## Directory layout
 
 ```text
@@ -246,6 +308,8 @@ What happens:
 ├── pymupdf_rag.py
 ├── requirements.txt
 ├── score.py
+├── api.py
+├── service.py
 └── transform.py
 ```
 
@@ -277,7 +341,6 @@ Please read the [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines on 
 - Add or adjust unit-free smoke tests that call each stage with minimal inputs.
 
 ---
-
 
 ## License
 
