@@ -187,7 +187,7 @@ You can leave it on during iteration. See the next section for details.
 <summary><b>4) Evaluation</b></summary>
 
 - `evaluator.py` uses templates that encode fairness and scoring rules.
-- Scores include `open_source`, `self_projects`, `production`, and `technical_skills`, plus bonus and deductions, then an explanation for evidence.
+- Scores include `open_source`, `self_projects`, `production`, `technical_skills`, `formatting`, and `impact`, plus bonus and deductions, then an explanation for evidence.
 
 </details>
 
@@ -254,10 +254,12 @@ Response (abridged):
   "overall_score": 76.0,
   "evaluation": {
     "scores": {
-      "open_source": { "score": 15, "max": 35, "evidence": "..." },
-      "self_projects": { "score": 28, "max": 30, "evidence": "..." },
+      "open_source": { "score": 10, "max": 25, "evidence": "..." },
+      "self_projects": { "score": 18, "max": 20, "evidence": "..." },
       "production": { "score": 20, "max": 25, "evidence": "..." },
-      "technical_skills": { "score": 8, "max": 10, "evidence": "..." }
+      "technical_skills": { "score": 8, "max": 10, "evidence": "..." },
+      "formatting": { "score": 4, "max": 5, "evidence": "..." },
+      "impact": { "score": 11, "max": 15, "evidence": "..." }
     },
     "bonus_points": { "total": 5, "breakdown": "..." },
     "deductions": { "total": 0, "reasons": "" },

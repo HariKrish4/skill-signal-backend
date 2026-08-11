@@ -9,6 +9,7 @@ uploads/
 resume_evaluations.csv
 resume_evaluations_*.csv
 greenhouse_resumes/*
+.dsstore
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

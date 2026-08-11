@@ -685,17 +685,27 @@ def transform_evaluation_response(
         csv_row["technical_skills_score"] = scores.technical_skills.score
         csv_row["technical_skills_max"] = scores.technical_skills.max
 
+        csv_row["formatting_score"] = scores.formatting.score
+        csv_row["formatting_max"] = scores.formatting.max
+
+        csv_row["impact_score"] = scores.impact.score
+        csv_row["impact_max"] = scores.impact.max
+
         total_score = (
             scores.open_source.score
             + scores.self_projects.score
             + scores.production.score
             + scores.technical_skills.score
+            + scores.formatting.score
+            + scores.impact.score
         )
         total_max = (
             scores.open_source.max
             + scores.self_projects.max
             + scores.production.max
             + scores.technical_skills.max
+            + scores.formatting.max
+            + scores.impact.max
         )
 
         csv_row["total_score"] = total_score
@@ -709,6 +719,10 @@ def transform_evaluation_response(
         csv_row["production_max"] = "N/A"
         csv_row["technical_skills_score"] = "N/A"
         csv_row["technical_skills_max"] = "N/A"
+        csv_row["formatting_score"] = "N/A"
+        csv_row["formatting_max"] = "N/A"
+        csv_row["impact_score"] = "N/A"
+        csv_row["impact_max"] = "N/A"
         csv_row["total_score"] = "N/A"
         csv_row["total_max"] = "N/A"
 

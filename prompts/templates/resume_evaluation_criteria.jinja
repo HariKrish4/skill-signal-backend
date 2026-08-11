@@ -1,6 +1,6 @@
 You are evaluating a resume for a Software Intern position at HackerRank. Analyze the resume data and provide scores based on these criteria:
 
-**MANDATORY: You MUST always fill ALL FOUR categories: open_source, self_projects, production, technical_skills.**
+**MANDATORY: You MUST always fill ALL SIX categories: open_source, self_projects, production, technical_skills, formatting, impact.**
 
 ## CRITICAL FAIRNESS REQUIREMENTS
 **SCORES MUST NEVER DEPEND ON:**
@@ -31,25 +31,25 @@ You are evaluating a resume for a Software Intern position at HackerRank. Analyz
 
 ## SCORING CRITERIA
 
-### Open Source (0-35 points)
-**HIGH SCORES (25-35 points):**
+### Open Source (0-25 points)
+**HIGH SCORES (18-25 points):**
 - Contributions to popular open source projects (1000+ stars)
 - Significant contributions to well-known projects
 - Google Summer of Code (GSoC) participation
 - Substantial community involvement
 
-**MEDIUM SCORES (15-24 points):**
+**MEDIUM SCORES (10-17 points):**
 - Contributions to smaller open source projects
 - Active GitHub presence with meaningful contributions to other repositories
 - Participation in open source programs
 
-**LOW SCORES (5-10 points):**
+**LOW SCORES (4-9 points):**
 - Only personal GitHub repositories with no contributions to other projects
 - Minimal open source activity
 - Basic GitHub presence
-- **CRITICAL**: Hacktoberfest participation alone (without evidence of contributions to significant projects) should receive 3-5 points maximum
+- **CRITICAL**: Hacktoberfest participation alone (without evidence of contributions to significant projects) should receive 2-4 points maximum
 
-**VERY LOW SCORES (0-4 points):**
+**VERY LOW SCORES (0-3 points):**
 - No GitHub presence
 - Only very basic personal repositories
 - Repositories that are clearly tutorial-based with no community involvement
@@ -57,19 +57,19 @@ You are evaluating a resume for a Software Intern position at HackerRank. Analyz
 **CRITICAL RULES:**
 - Having personal GitHub repositories does NOT constitute open source contribution
 - True open source contribution means contributing to OTHER people's projects
-- When GitHub data shows all projects are 'self_project' type, open source score MUST be 10 points or less
+- When GitHub data shows all projects are 'self_project' type, open source score MUST be 7 points or less
 
-### Self Projects (0-30 points)
-**HIGH SCORES (20-30 points):**
+### Self Projects (0-20 points)
+**HIGH SCORES (14-20 points):**
 - Complex projects with real-world impact
 - Advanced architecture, multiple technologies
 - User adoption or contributions to popular open source projects
 
-**MEDIUM SCORES (10-19 points):**
+**MEDIUM SCORES (7-13 points):**
 - Projects with some complexity, good documentation
 - Multiple features or moderate technical challenge
 
-**LOW SCORES (1-9 points):**
+**LOW SCORES (1-6 points):**
 - Simple tutorial projects (todo lists, calculators, basic CRUD apps, weather apps, note-taking apps, recipe apps, exercise apps)
 - Basic sentiment analysis using standard libraries (NLTK, scikit-learn)
 - Classroom assignments or projects with minimal technical complexity
@@ -88,6 +88,14 @@ You are evaluating a resume for a Software Intern position at HackerRank. Analyz
 
 ### Technical Skills (0-10 points)
 - Analyze the 'skills', 'languages', and evidence of technical breadth or problem-solving in projects, work, or competitions
+
+### Formatting (0-5 points)
+- Assess the resume layout and how cleanly it can be parsed by automated systems. **HIGH SCORES (4-5 points)**: clean single-column layout, standard fonts, clearly headed sections, no embedded tables, graphics, photos, or multi-column arrangements. **MEDIUM SCORES (2-3 points)**: two-column layout or minor tables/graphics that partially confuse parsing; some content garbled or out of order. **LOW SCORES (0-1 points)**: dense multi-column layouts, extensive tables, images, or unusual fonts that seriously confuse automated parsers; sections missing, merged, or jumbled.
+- **CRITICAL**: A clean, parseable layout without columns, graphics, or tables is the standard. Never award high formatting scores to resumes that rely on complex layouts.
+
+### Impact (0-15 points)
+- Assess the use of strong action verbs and measurable, quantifiable achievements across the 'work', 'projects', and 'volunteer' sections. **HIGH SCORES (11-15 points)**: bullet points consistently use strong action verbs (led, built, shipped, improved, increased, reduced, optimized) paired with concrete quantified outcomes (percentages, dollar amounts, user counts, latency reductions, error-rate improvements). **MEDIUM SCORES (5-10 points)**: some action verbs and a few metrics, but quantification is inconsistent, vague, or limited to one section. **LOW SCORES (0-4 points)**: passive or weak descriptions, responsibilities instead of achievements, and little to no measurable impact.
+- **CRITICAL**: Focus on measurable, quantifiable achievements. Resumes that only list duties without metrics should score low regardless of how many technologies they mention.
 
 ## PROJECT COMPLEXITY ASSESSMENT
 
@@ -138,12 +146,12 @@ You are evaluating a resume for a Software Intern position at HackerRank. Analyz
 
 **CRITICAL ENFORCEMENT:**
 - When GitHub data shows all projects are 'self_project' type, apply 3-5 point deductions for lack of true open source contributions
-- For candidates with only personal GitHub repositories, open source score should NEVER exceed 10 points
-- For candidates with only tutorial-based projects, self_projects score should NEVER exceed 15 points
+- For candidates with only personal GitHub repositories, open source score should NEVER exceed 7 points
+- For candidates with only tutorial-based projects, self_projects score should NEVER exceed 10 points
 
 ## CRITICAL REQUIREMENTS
 1. You MUST respond with ONLY the JSON structure below - no summary, no other fields
-2. You MUST fill ALL FOUR score categories: open_source, self_projects, production, technical_skills
+2. You MUST fill ALL SIX score categories: open_source, self_projects, production, technical_skills, formatting, impact
 3. You MUST provide evidence for each score
 4. You MUST NOT add any other fields like "summary", "skills", "experience", etc.
 5. You MUST NOT change the field names or structure
@@ -156,10 +164,12 @@ You are evaluating a resume for a Software Intern position at HackerRank. Analyz
 - Evidence fields cannot be empty string
 - All category scores must be >= 0 (cannot be negative)
 - **CATEGORY SCORE LIMITS** (CANNOT be exceeded under any circumstances):
-  - open_source: 0-35 points (maximum 35)
-  - self_projects: 0-30 points (maximum 30)
+  - open_source: 0-25 points (maximum 25)
+  - self_projects: 0-20 points (maximum 20)
   - production: 0-25 points (maximum 25)
   - technical_skills: 0-10 points (maximum 10)
+  - formatting: 0-5 points (maximum 5)
+  - impact: 0-15 points (maximum 15)
 - Bonus points total must be <= 20 (maximum 20 points)
 - **OVERALL SCORE LIMIT**: The total score (categories + bonus - deductions) cannot exceed 120 points
 
@@ -169,10 +179,12 @@ Analyze the following resume and provide a JSON response with this EXACT structu
 
 {
     "scores": {
-        "open_source": {"score": 0, "max": 35, "evidence": "string"},
-        "self_projects": {"score": 0, "max": 30, "evidence": "string"},
+        "open_source": {"score": 0, "max": 25, "evidence": "string"},
+        "self_projects": {"score": 0, "max": 20, "evidence": "string"},
         "production": {"score": 0, "max": 25, "evidence": "string"},
-        "technical_skills": {"score": 0, "max": 10, "evidence": "string"}
+        "technical_skills": {"score": 0, "max": 10, "evidence": "string"},
+        "formatting": {"score": 0, "max": 5, "evidence": "string"},
+        "impact": {"score": 0, "max": 15, "evidence": "string"}
     },
     "bonus_points": {"total": 0, "breakdown": "string"},
     "deductions": {"total": 0, "reasons": "string"},

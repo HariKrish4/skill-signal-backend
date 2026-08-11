@@ -57,10 +57,12 @@ def print_evaluation_results(
     if hasattr(evaluation, "scores") and evaluation.scores:
         # Define category maximums
         category_maxes = {
-            "open_source": 35,
-            "self_projects": 30,
+            "open_source": 25,
+            "self_projects": 20,
             "production": 25,
             "technical_skills": 10,
+            "formatting": 5,
+            "impact": 15,
         }
 
         # Open Source
@@ -99,6 +101,22 @@ def print_evaluation_results(
             capped_score = min(tech_score.score, category_maxes["technical_skills"])
             print(f"💻 Technical Skills:     {capped_score}/{tech_score.max}")
             print(f"   Evidence: {tech_score.evidence}")
+            print()
+
+        # Formatting
+        if hasattr(evaluation.scores, "formatting") and evaluation.scores.formatting:
+            fmt_score = evaluation.scores.formatting
+            capped_score = min(fmt_score.score, category_maxes["formatting"])
+            print(f"📄 Formatting:           {capped_score}/{fmt_score.max}")
+            print(f"   Evidence: {fmt_score.evidence}")
+            print()
+
+        # Impact
+        if hasattr(evaluation.scores, "impact") and evaluation.scores.impact:
+            imp_score = evaluation.scores.impact
+            capped_score = min(imp_score.score, category_maxes["impact"])
+            print(f"⚡ Impact:               {capped_score}/{imp_score.max}")
+            print(f"   Evidence: {imp_score.evidence}")
             print()
 
     # Bonus Points
