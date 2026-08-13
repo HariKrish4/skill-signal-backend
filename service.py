@@ -36,9 +36,9 @@ BLOB_HOST = "blob.vercel-storage.com"
 def _materialize_blob(pdf_path: str, cache_stem: str) -> str:
     """Download a Vercel Blob object to a local temp file and return its path.
 
-    Local file paths are returned unchanged so the CLI keeps working. Blob URLs
-    are resolved through the private-store head endpoint to get a signed
-    download URL, then fetched into the writable temp directory.
+    Local file paths are returned unchanged so the CLI keeps working. Private
+    blobs are fetched directly with the read/write token and written to the
+    writable temp directory.
     """
     if BLOB_HOST not in pdf_path:
         return pdf_path
@@ -49,20 +49,11 @@ def _materialize_blob(pdf_path: str, cache_stem: str) -> str:
             "BLOB_READ_WRITE_TOKEN is required to download from Vercel Blob"
         )
 
-    headers = {"Authorization": f"Bearer {token}"}
-    head_resp = requests.get(
-        "https://api.vercel.com/v1/blob/head",
-        params={"url": pdf_path},
-        headers=headers,
-        timeout=30,
+    content_resp = requests.get(
+        pdf_path,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=60,
     )
-    head_resp.raise_for_status()
-
-    download_url = head_resp.json().get("downloadUrl")
-    if not download_url:
-        raise ValueError("Vercel Blob head response did not include a downloadUrl")
-
-    content_resp = requests.get(download_url, timeout=60)
     content_resp.raise_for_status()
 
     temp_path = os.path.join(tempfile.gettempdir(), f"{cache_stem}.pdf")

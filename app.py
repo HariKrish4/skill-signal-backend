@@ -42,7 +42,9 @@ app.add_middleware(
 
 UPLOAD_DIR = "uploads"
 
-BLOB_API_BASE = "https://api.vercel.com/v1/blob"
+BLOB_API_BASE = "https://vercel.com/api/blob"
+
+BLOB_API_HEADERS = {"x-api-version": "12"}
 
 
 def _upload_to_blob(content: bytes, cache_stem: str) -> str:
@@ -54,11 +56,13 @@ def _upload_to_blob(content: bytes, cache_stem: str) -> str:
         )
 
     response = requests.put(
-        f"{BLOB_API_BASE}/upload",
+        f"{BLOB_API_BASE}/",
         params={"pathname": f"resumes/{cache_stem}.pdf"},
         headers={
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/pdf",
+            "x-vercel-blob-access": "private",
+            "x-content-type": "application/pdf",
+            **BLOB_API_HEADERS,
         },
         data=content,
         timeout=120,
