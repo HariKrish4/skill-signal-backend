@@ -2,7 +2,7 @@
 REST API for the Hiring Agent resume-to-score pipeline.
 
 Run with:
-    uvicorn api:app --reload
+    uvicorn app:app --reload
 """
 
 import hashlib
@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Dict, Optional
 
+import requests
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -40,6 +41,35 @@ app.add_middleware(
 )
 
 UPLOAD_DIR = "uploads"
+
+BLOB_API_BASE = "https://api.vercel.com/v1/blob"
+
+
+def _upload_to_blob(content: bytes, cache_stem: str) -> str:
+    """Upload resume bytes to a private Vercel Blob store and return its URL."""
+    token = os.environ.get("BLOB_READ_WRITE_TOKEN")
+    if not token:
+        raise HTTPException(
+            status_code=500, detail="BLOB_READ_WRITE_TOKEN is not configured"
+        )
+
+    response = requests.put(
+        f"{BLOB_API_BASE}/upload",
+        params={"pathname": f"resumes/{cache_stem}.pdf"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/pdf",
+        },
+        data=content,
+        timeout=120,
+    )
+    if response.status_code != 200:
+        logger.error("Vercel Blob upload failed: %s", response.text)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to store resume: {response.text[:200]}",
+        )
+    return response.json()["url"]
 
 
 class HealthResponse(BaseModel):
@@ -83,21 +113,19 @@ def evaluate(file: UploadFile = File(...)):
 
     cache_stem = hashlib.sha256(content).hexdigest()
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    tmp_path = os.path.join(UPLOAD_DIR, f"{cache_stem}.pdf")
-    with open(tmp_path, "wb") as f:
-        f.write(content)
+    if os.environ.get("BLOB_READ_WRITE_TOKEN"):
+        resume_path = _upload_to_blob(content, cache_stem)
+    else:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        resume_path = os.path.join(UPLOAD_DIR, f"{cache_stem}.pdf")
+        with open(resume_path, "wb") as f:
+            f.write(content)
 
     try:
-        result = run_pipeline(tmp_path, cache_stem=cache_stem)
+        result = run_pipeline(resume_path, cache_stem=cache_stem)
     except Exception as e:
         logger.exception("Evaluation pipeline failed")
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {e}")
-    finally:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
 
     if result is None:
         raise HTTPException(

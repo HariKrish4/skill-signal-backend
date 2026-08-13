@@ -2,14 +2,17 @@
 Reusable resume-evaluation pipeline service.
 
 Extracted from score.py so both the CLI (score.py) and the REST API
-(api.py) can run the same end-to-end flow and get structured results.
+(app.py) can run the same end-to-end flow and get structured results.
 """
 
 import os
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+import requests
 
 from pdf import PDFHandler
 from github import fetch_and_display_github_info
@@ -26,6 +29,46 @@ from config import DEVELOPMENT_MODE
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = "cache"
+
+BLOB_HOST = "blob.vercel-storage.com"
+
+
+def _materialize_blob(pdf_path: str, cache_stem: str) -> str:
+    """Download a Vercel Blob object to a local temp file and return its path.
+
+    Local file paths are returned unchanged so the CLI keeps working. Blob URLs
+    are resolved through the private-store head endpoint to get a signed
+    download URL, then fetched into the writable temp directory.
+    """
+    if BLOB_HOST not in pdf_path:
+        return pdf_path
+
+    token = os.environ.get("BLOB_READ_WRITE_TOKEN")
+    if not token:
+        raise ValueError(
+            "BLOB_READ_WRITE_TOKEN is required to download from Vercel Blob"
+        )
+
+    headers = {"Authorization": f"Bearer {token}"}
+    head_resp = requests.get(
+        "https://api.vercel.com/v1/blob/head",
+        params={"url": pdf_path},
+        headers=headers,
+        timeout=30,
+    )
+    head_resp.raise_for_status()
+
+    download_url = head_resp.json().get("downloadUrl")
+    if not download_url:
+        raise ValueError("Vercel Blob head response did not include a downloadUrl")
+
+    content_resp = requests.get(download_url, timeout=60)
+    content_resp.raise_for_status()
+
+    temp_path = os.path.join(tempfile.gettempdir(), f"{cache_stem}.pdf")
+    with open(temp_path, "wb") as f:
+        f.write(content_resp.content)
+    return temp_path
 
 
 def is_valid_resume_data(resume_data: JSONResume) -> bool:
@@ -116,9 +159,7 @@ def _load_cached_resume(cache_filename: str) -> Optional[JSONResume]:
         try:
             os.remove(cache_filename)
         except Exception as delete_err:
-            print(
-                f"Failed to delete invalid cache file {cache_filename}: {delete_err}"
-            )
+            print(f"Failed to delete invalid cache file {cache_filename}: {delete_err}")
     return None
 
 
@@ -178,7 +219,9 @@ def _save_cached_github(github_cache_filename: str, github_data: dict) -> None:
     )
 
 
-def run_pipeline(pdf_path: str, cache_stem: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def run_pipeline(
+    pdf_path: str, cache_stem: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Run the full resume evaluation pipeline.
 
@@ -193,6 +236,8 @@ def run_pipeline(pdf_path: str, cache_stem: Optional[str] = None) -> Optional[Di
     """
     if cache_stem is None:
         cache_stem = os.path.basename(pdf_path).replace(".pdf", "")
+
+    pdf_path = _materialize_blob(pdf_path, cache_stem)
 
     cache_filename = os.path.join(CACHE_DIR, f"resumecache_{cache_stem}.json")
     github_cache_filename = os.path.join(CACHE_DIR, f"githubcache_{cache_stem}.json")

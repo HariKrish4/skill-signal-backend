@@ -37,7 +37,7 @@
 
 ## Overview
 
-Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a local or hosted LLM, augments the data with GitHub profile and repository signals, then produces an objective evaluation with category scores, evidence, bonus points, and deductions. It runs as a CLI or as a REST API (`api.py`). You can run fully local with Ollama or use Google Gemini.
+Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a local or hosted LLM, augments the data with GitHub profile and repository signals, then produces an objective evaluation with category scores, evidence, bonus points, and deductions. It runs as a CLI or as a REST API (`app.py`). You can run fully local with Ollama or use Google Gemini.
 
 ---
 
@@ -55,7 +55,7 @@ Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a lo
 4. `evaluator.py` runs a strict-scored evaluation with fairness constraints.
 5. `service.py` orchestrates the shared end-to-end pipeline used by both the CLI and the API.
 6. `score.py` prints the readable summary and writes CSV when development mode is on.
-7. `api.py` exposes the same pipeline as a REST API.
+7. `app.py` exposes the same pipeline as a REST API.
 
 </td>
 <td>
@@ -226,7 +226,7 @@ A FastAPI server exposes the same pipeline over HTTP. Interactive Swagger docs a
 ### Starting the server
 
 ```bash
-$ uvicorn api:app --reload --port 8000
+$ uvicorn app:app --reload --port 8000
 ```
 
 ### Endpoints
@@ -310,7 +310,7 @@ Response (abridged):
 ├── pymupdf_rag.py
 ├── requirements.txt
 ├── score.py
-├── api.py
+├── app.py
 ├── service.py
 └── transform.py
 ```
