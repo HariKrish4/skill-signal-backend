@@ -3,8 +3,8 @@
 <p align="center"><strong>Resume-to-Score pipeline</strong> that extracts structured data from PDFs, enriches with GitHub signals, and outputs a fair, explainable evaluation.</p>
 
 <p align="center">
-  <a href="https://www.python.org/downloads/release/python-3110/">
-    <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
+  <a href="https://www.python.org/downloads/release/python-3120/">
+    <img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue.svg">
   </a>
   <a href="https://github.com/interviewstreet/hiring-agent/blob/master/LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow.svg">
@@ -84,9 +84,9 @@ Hiring Agent parses a resume PDF to Markdown, extracts sectioned JSON using a lo
 
 ### Prerequisites
 
-- **Python 3.11+**
+- **Python 3.12+**
 
-  The repository pins `.python-version` to 3.11.13.
+  The repository pins `.python-version` to 3.12.
 
 - **One LLM backend** (either of them)
   - **Ollama** for local models
