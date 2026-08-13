@@ -88,6 +88,20 @@ class EvaluationResponse(BaseModel):
     cache_used: bool
 
 
+@app.get("/")
+def root():
+    """Service overview and available endpoints."""
+    return {
+        "service": "Hiring Agent API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "evaluate": "/evaluate",
+            "docs": "/docs",
+        },
+    }
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     """Health check returning the configured LLM provider and model."""
