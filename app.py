@@ -8,11 +8,13 @@ Run with:
 import hashlib
 import logging
 import os
+import re
 from typing import Dict, Optional
 
 import requests
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from config import DEVELOPMENT_MODE
@@ -30,7 +32,7 @@ app = FastAPI(
 
 ALLOWED_ORIGINS = os.environ.get(
     "CORS_ORIGINS",
-    "http://localhost:5173",
+    "http://localhost:5173,https://skill-signal-frontend-tau.vercel.app",
 ).split(",")
 
 app.add_middleware(
@@ -45,6 +47,17 @@ UPLOAD_DIR = "uploads"
 BLOB_API_BASE = "https://vercel.com/api/blob"
 
 BLOB_API_HEADERS = {"x-api-version": "12"}
+
+RESUME_STEM_RE = re.compile(r"^[a-f0-9]{64}$")
+
+
+def _blob_store_id() -> Optional[str]:
+    """Extract the Blob store id from the read/write token (matches the SDK)."""
+    token = os.environ.get("BLOB_READ_WRITE_TOKEN")
+    if not token:
+        return None
+    parts = token.split("_")
+    return parts[3] if len(parts) > 3 else None
 
 
 def _upload_to_blob(content: bytes, cache_stem: str) -> str:
@@ -90,6 +103,7 @@ class EvaluationResponse(BaseModel):
     resume_data: Optional[JSONResume] = None
     github_data: Optional[Dict] = None
     cache_used: bool
+    resume_url: Optional[str] = None
 
 
 @app.get("/")
@@ -150,4 +164,39 @@ def evaluate(file: UploadFile = File(...)):
             status_code=422, detail="Failed to extract resume data from PDF"
         )
 
+    if _blob_store_id():
+        result["resume_url"] = f"/resume/{cache_stem}"
+
     return result
+
+
+@app.get("/resume/{cache_stem}")
+def get_resume(cache_stem: str):
+    """Stream a stored resume PDF back from the private Blob store."""
+    if not RESUME_STEM_RE.match(cache_stem):
+        raise HTTPException(status_code=404, detail="Stored resume not found")
+
+    store_id = _blob_store_id()
+    if not store_id:
+        raise HTTPException(status_code=404, detail="Stored resume not found")
+
+    blob_url = (
+        f"https://{store_id}.private.blob.vercel-storage.com/resumes/{cache_stem}.pdf"
+    )
+    upstream = requests.get(
+        blob_url,
+        headers={"Authorization": f"Bearer {os.environ['BLOB_READ_WRITE_TOKEN']}"},
+        timeout=60,
+    )
+    if upstream.status_code == 404:
+        raise HTTPException(status_code=404, detail="Stored resume not found")
+    upstream.raise_for_status()
+
+    return StreamingResponse(
+        upstream.iter_content(chunk_size=8192),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{cache_stem}.pdf"',
+            "Cache-Control": "public, max-age=3600",
+        },
+    )

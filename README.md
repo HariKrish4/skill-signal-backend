@@ -231,10 +231,11 @@ $ uvicorn app:app --reload --port 8000
 
 ### Endpoints
 
-| Method | Path        | Description                                                                  |
-| ------ | ----------- | ---------------------------------------------------------------------------- |
-| `GET`  | `/health`   | Liveness check; returns the configured LLM provider and model.               |
-| `POST` | `/evaluate` | Upload a resume PDF (multipart form field `file`) and get a JSON evaluation. |
+| Method | Path                  | Description                                                                  |
+| ------ | --------------------- | ---------------------------------------------------------------------------- |
+| `GET`  | `/health`             | Liveness check; returns the configured LLM provider and model.               |
+| `POST` | `/evaluate`           | Upload a resume PDF (multipart form field `file`) and get a JSON evaluation. |
+| `GET`  | `/resume/{cache_stem}` | Streams back a stored resume PDF (the value of `resume_url` from `/evaluate`). |
 
 ### Example
 
@@ -268,14 +269,18 @@ Response (abridged):
   },
   "resume_data": { "basics": {}, "work": [], "...": null },
   "github_data": { "profile": {}, "projects": [], "total_projects": 7 },
-  "cache_used": true
+  "cache_used": true,
+  "resume_url": "/resume/430661b7f060771311b3715c468b93832fba8724873f23c9972acf1a70acdb28"
 }
 ```
+
+> **Note:** `resume_url` is present only when `BLOB_READ_WRITE_TOKEN` is configured. The uploaded PDF is stored in a private Vercel Blob store and streamed back through `GET /resume/{cache_stem}` so the token never reaches the browser. Without the token (local dev), `resume_url` is `null` and files fall back to the local `uploads/` directory.
 
 ### API notes
 
 - Uploads are validated: the file must be a PDF (magic bytes `%PDF`); otherwise a `400` is returned. A missing file returns `422`.
 - Pipeline errors return `500`; failure to extract resume data returns `422`.
+- `GET /resume/{cache_stem}` returns `404` when the stem is malformed, Blob storage is not configured, or the object does not exist.
 - Cache keys are derived from the SHA-256 hash of the uploaded bytes, so re-uploading the same resume reuses the `cache/` entries instead of re-running PDF extraction and GitHub fetching.
 - The API returns structured JSON and does **not** write to `resume_evaluations.csv` (only the CLI does).
 
