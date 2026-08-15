@@ -160,11 +160,14 @@ def _save_cached_resume(cache_filename: str, resume_data: JSONResume) -> None:
             "Newly extracted resume data is empty/invalid. Skipping cache write."
         )
         return
-    os.makedirs(os.path.dirname(cache_filename), exist_ok=True)
-    Path(cache_filename).write_text(
-        json.dumps(resume_data.model_dump(), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    try:
+        os.makedirs(os.path.dirname(cache_filename), exist_ok=True)
+        Path(cache_filename).write_text(
+            json.dumps(resume_data.model_dump(), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        logger.warning("Failed to cache resume data to %s: %s", cache_filename, e)
 
 
 def _load_cached_github(github_cache_filename: str) -> Optional[dict]:
@@ -203,11 +206,16 @@ def _save_cached_github(github_cache_filename: str, github_data: dict) -> None:
         or "profile" not in github_data
     ):
         return
-    os.makedirs(os.path.dirname(github_cache_filename), exist_ok=True)
-    Path(github_cache_filename).write_text(
-        json.dumps(github_data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    try:
+        os.makedirs(os.path.dirname(github_cache_filename), exist_ok=True)
+        Path(github_cache_filename).write_text(
+            json.dumps(github_data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        logger.warning(
+            "Failed to cache GitHub data to %s: %s", github_cache_filename, e
+        )
 
 
 def run_pipeline(

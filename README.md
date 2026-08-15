@@ -144,15 +144,16 @@ $ cp .env.example .env
 | `DEFAULT_MODEL`  | for example `gemma3:4b` or `gemini-2.5-pro` | Model name passed to the provider.                                     |
 | `GEMINI_API_KEY` | string                                      | Required when `LLM_PROVIDER=gemini`.                                   |
 | `GITHUB_TOKEN`   | optional                                    | Inherits from your shell environment, improves GitHub API rate limits. |
+| `DEVELOPMENT_MODE` | `true` or `false`                          | Enables caching and CSV export. Defaults to on locally, off on Vercel. |
 
 Provider mapping lives in `prompt.py` and `models.py`. The `config.py` file has a single flag:
 
 ```python
 # config.py
-DEVELOPMENT_MODE = True  # enables caching and CSV export
+DEVELOPMENT_MODE = ...  # env-driven; defaults True locally, False on Vercel
 ```
 
-You can leave it on during iteration. See the next section for details.
+You can leave it on during local iteration. See the next section for details.
 
 ---
 

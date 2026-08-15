@@ -9,6 +9,7 @@ import hashlib
 import logging
 import os
 import re
+import tempfile
 from typing import Dict, Optional
 
 import requests
@@ -148,10 +149,22 @@ def evaluate(file: UploadFile = File(...)):
     if os.environ.get("BLOB_READ_WRITE_TOKEN"):
         resume_path = _upload_to_blob(content, cache_stem)
     else:
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        resume_path = os.path.join(UPLOAD_DIR, f"{cache_stem}.pdf")
-        with open(resume_path, "wb") as f:
-            f.write(content)
+        try:
+            os.makedirs(UPLOAD_DIR, exist_ok=True)
+            resume_path = os.path.join(UPLOAD_DIR, f"{cache_stem}.pdf")
+            with open(resume_path, "wb") as f:
+                f.write(content)
+        except OSError as e:
+            temp_path = os.path.join(tempfile.gettempdir(), f"{cache_stem}.pdf")
+            with open(temp_path, "wb") as f:
+                f.write(content)
+            logger.warning(
+                "Failed to write to %s, falling back to %s: %s",
+                UPLOAD_DIR,
+                temp_path,
+                e,
+            )
+            resume_path = temp_path
 
     try:
         result = run_pipeline(resume_path, cache_stem=cache_stem)
