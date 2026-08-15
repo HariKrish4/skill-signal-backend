@@ -71,7 +71,7 @@ def _upload_to_blob(content: bytes, cache_stem: str) -> str:
 
     response = requests.put(
         f"{BLOB_API_BASE}/",
-        params={"pathname": f"resumes/{cache_stem}.pdf"},
+        params={"pathname": f"resumes/{cache_stem}.pdf", "allowOverwrite": "true"},
         headers={
             "Authorization": f"Bearer {token}",
             "x-vercel-blob-access": "private",
